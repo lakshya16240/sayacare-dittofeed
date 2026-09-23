@@ -1,0 +1,26 @@
+# Optional overlay: publish the web tier on loopback AND a second interface,
+# typically a tailnet address.
+#
+# Use it when the host needs both paths at once -- a Cloudflare tunnel (or any
+# reverse proxy) reaching lite over loopback, and direct access from tailnet
+# peers. docker-compose.prod.yaml alone binds a single interface via LITE_BIND,
+# which cannot serve both.
+#
+#   docker compose -f docker-compose.prod.yaml -f docker-compose.tailnet.yaml \
+#     --env-file .env.prod up -d lite
+#
+# Requires LITE_TAILNET_BIND in .env.prod (e.g. the output of `tailscale ip -4`).
+# The address is deliberately not hardcoded here: it differs per host.
+#
+# `!override` is required. Compose APPENDS to `ports` by default, so without it
+# the base file's mapping would remain alongside these and LITE_BIND would be
+# silently applied as a third bind.
+#
+# Note this couples the public path to tailscaled: if the tailnet interface
+# disappears, the second mapping's address goes with it. The loopback mapping
+# below is what keeps the tunnel working independently of that.
+services:
+  lite:
+    ports: !override
+      - "${LITE_BIND:-127.0.0.1}:${LITE_PORT:-3000}:3000"
+      - "${LITE_TAILNET_BIND:?set LITE_TAILNET_BIND to this host's tailnet address}:${LITE_PORT:-3000}:3000"

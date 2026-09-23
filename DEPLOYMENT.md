@@ -9,6 +9,7 @@ Postgres and ClickHouse containerized on the same VM. All three application cont
 run **the same image**.
 
 - [docker-compose.prod.yaml](docker-compose.prod.yaml) — the stack
+- [docker-compose.tailnet.yaml](docker-compose.tailnet.yaml) — optional overlay to publish on a tailnet address as well as loopback
 - [.env.prod.example](.env.prod.example) — the environment template
 - [.github/workflows/docker-build-publish.yaml](.github/workflows/docker-build-publish.yaml) — builds and publishes the image
 
@@ -199,6 +200,37 @@ Then create a trivial segment and check it computes within ~2 minutes. If segmen
 update, the worker is not consuming the queue the web tier schedules onto — see the warning
 below.
 
+## Publishing on a tailnet as well as loopback
+
+`docker-compose.prod.yaml` binds one interface, chosen by `LITE_BIND` and
+defaulting to `127.0.0.1`. That is right when only a reverse proxy or a
+Cloudflare tunnel sits in front. It cannot serve loopback and a tailnet address
+at once -- setting `LITE_BIND` to the tailnet address stops loopback listening,
+which takes the tunnel down with no error anywhere.
+
+For both at once, add the overlay:
+
+```bash
+echo 'LITE_TAILNET_BIND='"$(tailscale ip -4)" >> .env.prod
+
+docker compose -f docker-compose.prod.yaml -f docker-compose.tailnet.yaml \
+  --env-file .env.prod up -d lite
+```
+
+`PORTS` in `ps` should then list both `127.0.0.1:3000` and the tailnet address.
+
+**Pass both `-f` flags every time.** Using `-f` disables Compose's automatic
+override discovery, so a command that omits the second file silently drops the
+tailnet bind on the next `up -d` -- the tunnel keeps working and direct access
+just stops. Setting the file list once per host avoids that:
+
+```bash
+echo 'export COMPOSE_FILE=docker-compose.prod.yaml:docker-compose.tailnet.yaml' >> ~/.bashrc
+```
+
+Then `sudo -E docker compose --env-file .env.prod up -d lite` picks up both;
+`sudo` without `-E` drops the variable.
+
 ## Step 6 — Redeploying
 
 ```bash
@@ -214,6 +246,13 @@ docker compose -f docker-compose.prod.yaml --env-file .env.prod up -d
 
 Rollback is `IMAGE_TAG` back to the previous `sha-…` and `up -d` again. Note that rollback does
 **not** revert migrations, so avoid destructive ones.
+
+**Compose and env changes need no rebuild.** The Dockerfile copies only
+`packages/*`, so the compose files and `.env.prod.example` are never in the
+image -- they take effect from the git checkout on the host. For a change that
+touches only those, `git pull` (or `git checkout <tag>`) plus `up -d` is the
+whole deploy; tagging is optional and only worth it to keep the deployed tag
+aligned with the tree.
 
 ---
 
