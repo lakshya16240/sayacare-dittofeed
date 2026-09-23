@@ -80,8 +80,12 @@ services:
       # while never actually logging in.
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
     ports:
-      # Loopback only. The reverse proxy terminates TLS and forwards here.
-      - "127.0.0.1:${LITE_PORT:-3000}:3000"
+      # Defaults to loopback only, with the reverse proxy terminating TLS in
+      # front. LITE_BIND moves the bind to a specific interface -- a tailnet
+      # address, say -- without exposing the port publicly. Leave it unset
+      # unless you mean it: 0.0.0.0 would publish the dashboard to the
+      # internet with only its single shared password in front.
+      - "${LITE_BIND:-127.0.0.1}:${LITE_PORT:-3000}:3000"
     depends_on:
       postgres:
         condition: service_healthy
