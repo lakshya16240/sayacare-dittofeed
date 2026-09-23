@@ -10,6 +10,7 @@ run **the same image**.
 
 - [docker-compose.prod.yaml](docker-compose.prod.yaml) — the stack
 - [docker-compose.tailnet.yaml](docker-compose.tailnet.yaml) — optional overlay to publish on a tailnet address as well as loopback
+- [compose.sh](compose.sh) — wrapper that applies the right compose files and env file; prefer it over calling `docker compose` directly
 - [.env.prod.example](.env.prod.example) — the environment template
 - [.github/workflows/docker-build-publish.yaml](.github/workflows/docker-build-publish.yaml) — builds and publishes the image
 
@@ -219,17 +220,23 @@ docker compose -f docker-compose.prod.yaml -f docker-compose.tailnet.yaml \
 
 `PORTS` in `ps` should then list both `127.0.0.1:3000` and the tailnet address.
 
-**Pass both `-f` flags every time.** Using `-f` disables Compose's automatic
-override discovery, so a command that omits the second file silently drops the
-tailnet bind on the next `up -d` -- the tunnel keeps working and direct access
-just stops. Setting the file list once per host avoids that:
+**Use `./compose.sh` rather than calling `docker compose` directly.** Passing
+`-f` disables Compose's automatic override discovery, so a command that omits
+the second file silently drops the tailnet bind on the next `up -d` -- the
+tunnel keeps working and direct access just stops, with no error. The wrapper
+applies the right files and env file every time:
 
 ```bash
-echo 'export COMPOSE_FILE=docker-compose.prod.yaml:docker-compose.tailnet.yaml' >> ~/.bashrc
+sudo ./compose.sh up -d
+sudo ./compose.sh ps
+sudo ./compose.sh logs -f lite worker
+sudo ./compose.sh pull
+sudo ./compose.sh run --rm admin migrate
 ```
 
-Then `sudo -E docker compose --env-file .env.prod up -d lite` picks up both;
-`sudo` without `-E` drops the variable.
+It includes the tailnet overlay only when `LITE_TAILNET_BIND` is set, so the
+same script works unchanged on a host that only needs loopback. It echoes the
+command it runs, so what happened is always visible.
 
 ## Step 6 — Redeploying
 
