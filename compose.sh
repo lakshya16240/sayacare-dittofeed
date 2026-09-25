@@ -34,5 +34,8 @@ if grep -qE '^[[:space:]]*LITE_TAILNET_BIND=[^[:space:]]' "$ENV_FILE"; then
   files+=(-f docker-compose.tailnet.yaml)
 fi
 
-echo "+ docker compose ${files[*]} --env-file $ENV_FILE $*" >&2
+# Only the file list is echoed, never the arguments: a command like
+# `exec ... clickhouse-client --password X` would otherwise put the secret
+# into the terminal and the shell history.
+echo "+ compose files: ${files[*]} --env-file $ENV_FILE" >&2
 exec docker compose "${files[@]}" --env-file "$ENV_FILE" "$@"
