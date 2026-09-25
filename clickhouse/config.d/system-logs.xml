@@ -1,0 +1,25 @@
+<!--
+  Disables ClickHouse's own telemetry tables.
+
+  On an essentially idle workspace these dominated the server: ~200M rows in
+  asynchronous_metric_log and ~141M in text_log over 18 hours, with ClickHouse
+  burning ~314% CPU and 138 GB written merging its own logs. No Dittofeed table
+  appeared in the top eight by size. The stock image enables all of these at
+  default settings, and the service previously mounted no config.d, so there
+  was nothing overriding them.
+
+  query_log is deliberately kept, since it is what made the diagnosis
+  possible, but capped with a TTL so it cannot grow without bound.
+-->
+<clickhouse>
+    <asynchronous_metric_log remove="1"/>
+    <text_log remove="1"/>
+    <processors_profile_log remove="1"/>
+    <trace_log remove="1"/>
+    <metric_log remove="1"/>
+    <error_log remove="1"/>
+
+    <query_log>
+        <ttl>event_date + INTERVAL 14 DAY DELETE</ttl>
+    </query_log>
+</clickhouse>

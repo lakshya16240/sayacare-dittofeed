@@ -198,6 +198,9 @@ services:
         soft: 262144
         hard: 262144
     volumes:
+      # Disables ClickHouse's own telemetry tables, which otherwise dominate
+      # the server on an idle workspace. See the file for the measurements.
+      - ./clickhouse/config.d:/etc/clickhouse-server/config.d:ro
       - clickhouse_lib:/var/lib/clickhouse
       - clickhouse_log:/var/log/clickhouse-server
     networks: [dittofeed]

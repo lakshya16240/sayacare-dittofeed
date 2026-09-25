@@ -263,6 +263,29 @@ aligned with the tree.
 
 ---
 
+## ClickHouse telemetry is disabled on purpose
+
+`clickhouse/config.d/system-logs.xml` turns off six of ClickHouse's own logging
+tables and caps `query_log` at 14 days. Without it the stock image ran them at
+default settings and they dominated the server on an otherwise idle workspace:
+~200M rows in `asynchronous_metric_log`, ~141M in `text_log` over 18 hours,
+~314% CPU and 138 GB written, with no Dittofeed table in the top eight by size.
+
+The file is mounted read-only at `/etc/clickhouse-server/config.d`. Verified on
+clickhouse-server 24.12: the six tables are never created, and `query_log`
+carries `TTL event_date + toIntervalDay(14)`.
+
+Two caveats when applying it to a server that has been running without it:
+
+- `remove="1"` stops the tables being created; it does not drop existing ones.
+  Reclaim the space with `TRUNCATE TABLE system.<name>` for each.
+- The `query_log` TTL applies to the table as created. On a server whose
+  `system.query_log` predates this config, set it explicitly:
+
+  ```sql
+  ALTER TABLE system.query_log MODIFY TTL event_date + INTERVAL 14 DAY DELETE;
+  ```
+
 ## Do not copy the helm chart's task-queue variables
 
 [helm-charts/dittofeed/templates/deployment.yaml](helm-charts/dittofeed/templates/deployment.yaml#L77-L85)
