@@ -61,9 +61,12 @@ x-logging: &logging
 
 services:
   # Web tier: Fastify API with the Next.js dashboard mounted on the same port.
+  # always, not unless-stopped: unless-stopped skips a container that was in a
+  # stopped state when the daemon went down, so a shutdown that stops containers
+  # leaves them down after a reboot. lite sat dead for four days that way.
   lite:
     image: "${IMAGE_REPOSITORY:?set IMAGE_REPOSITORY}:${IMAGE_TAG:?set IMAGE_TAG}"
-    restart: unless-stopped
+    restart: always
     logging: *logging
     command:
       - node
@@ -106,7 +109,7 @@ services:
   # updating with no error anywhere.
   worker:
     image: "${IMAGE_REPOSITORY:?set IMAGE_REPOSITORY}:${IMAGE_TAG:?set IMAGE_TAG}"
-    restart: unless-stopped
+    restart: always
     logging: *logging
     command:
       - node
@@ -142,7 +145,7 @@ services:
 
   temporal:
     image: temporalio/auto-setup:${TEMPORAL_VERSION:-1.22.4}
-    restart: unless-stopped
+    restart: always
     logging: *logging
     mem_limit: ${TEMPORAL_MEM_LIMIT:-1024m}
     environment:
@@ -161,7 +164,7 @@ services:
 
   postgres:
     image: postgres:${POSTGRES_VERSION:-15}
-    restart: unless-stopped
+    restart: always
     logging: *logging
     environment:
       - POSTGRES_USER=${DATABASE_USER}
@@ -181,7 +184,7 @@ services:
 
   clickhouse-server:
     image: clickhouse/clickhouse-server:24.12.6.70-alpine
-    restart: unless-stopped
+    restart: always
     logging: *logging
     mem_limit: ${CLICKHOUSE_MEM_LIMIT:-4096m}
     environment:
