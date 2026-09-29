@@ -203,7 +203,13 @@ services:
     volumes:
       # Disables ClickHouse's own telemetry tables, which otherwise dominate
       # the server on an idle workspace. See the file for the measurements.
-      - ./clickhouse/config.d:/etc/clickhouse-server/config.d:ro
+      #
+      # The FILE, not the directory. Mounting the directory shadows what the image
+      # ships in it -- including docker_related_config.xml, which is the only thing
+      # setting <listen_host>0.0.0.0</listen_host>. Without it ClickHouse listens on
+      # localhost only: healthchecks and `docker exec clickhouse-client` still pass,
+      # while every other container gets ECONNREFUSED.
+      - ./clickhouse/config.d/system-logs.xml:/etc/clickhouse-server/config.d/system-logs.xml:ro
       - clickhouse_lib:/var/lib/clickhouse
       - clickhouse_log:/var/log/clickhouse-server
     networks: [dittofeed]
