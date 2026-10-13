@@ -84,10 +84,15 @@ services:
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
     ports:
       # Defaults to loopback only, with the reverse proxy terminating TLS in
-      # front. LITE_BIND moves the bind to a specific interface -- a tailnet
-      # address, say -- without exposing the port publicly. Leave it unset
-      # unless you mean it: 0.0.0.0 would publish the dashboard to the
-      # internet with only its single shared password in front.
+      # front. LITE_BIND moves the bind to a specific interface without
+      # exposing the port publicly. Leave it unset unless you mean it: 0.0.0.0
+      # would publish the dashboard to the internet with only its single
+      # shared password in front.
+      #
+      # Never bind a tailnet address here; use `tailscale serve` instead (see
+      # DEPLOYMENT.md). At boot Docker can start this container before
+      # Tailscale assigns the address, the bind fails, and the container comes
+      # up with none of its ports published, loopback included.
       - "${LITE_BIND:-127.0.0.1}:${LITE_PORT:-3000}:3000"
     depends_on:
       postgres:

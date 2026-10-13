@@ -9,8 +9,7 @@ Postgres and ClickHouse containerized on the same VM. All three application cont
 run **the same image**.
 
 - [docker-compose.prod.yaml](docker-compose.prod.yaml) — the stack
-- [docker-compose.tailnet.yaml](docker-compose.tailnet.yaml) — optional overlay to publish on a tailnet address as well as loopback
-- [compose.sh](compose.sh) — wrapper that applies the right compose files and env file; prefer it over calling `docker compose` directly
+- [compose.sh](compose.sh) — wrapper that applies the compose file and env file; prefer it over calling `docker compose` directly
 - [.env.prod.example](.env.prod.example) — the environment template
 - [.github/workflows/docker-build-publish.yaml](.github/workflows/docker-build-publish.yaml) — builds and publishes the image
 
@@ -201,30 +200,34 @@ Then create a trivial segment and check it computes within ~2 minutes. If segmen
 update, the worker is not consuming the queue the web tier schedules onto — see the warning
 below.
 
-## Publishing on a tailnet as well as loopback
+## Reaching the dashboard over a tailnet
 
-`docker-compose.prod.yaml` binds one interface, chosen by `LITE_BIND` and
-defaulting to `127.0.0.1`. That is right when only a reverse proxy or a
-Cloudflare tunnel sits in front. It cannot serve loopback and a tailnet address
-at once -- setting `LITE_BIND` to the tailnet address stops loopback listening,
-which takes the tunnel down with no error anywhere.
-
-For both at once, add the overlay:
+Docker publishes `lite` on loopback only (`LITE_BIND`, default `127.0.0.1`),
+which is where the Cloudflare tunnel or reverse proxy connects. For direct
+access from tailnet peers, have Tailscale forward its own port to that loopback
+port rather than publishing a second Docker port:
 
 ```bash
-echo 'LITE_TAILNET_BIND='"$(tailscale ip -4)" >> .env.prod
-
-docker compose -f docker-compose.prod.yaml -f docker-compose.tailnet.yaml \
-  --env-file .env.prod up -d lite
+sudo tailscale serve --bg --tcp 3000 tcp://127.0.0.1:3000
+tailscale serve status
 ```
 
-`PORTS` in `ps` should then list both `127.0.0.1:3000` and the tailnet address.
+Peers then reach `http://<tailnet ip>:3000`. `--bg` stores the setting in
+tailscaled, so it survives reboots and comes back whenever Tailscale does. This
+syntax needs Tailscale 1.52 or later.
+
+**Do not bind Docker to the tailnet address**, through `LITE_BIND` or a second
+`ports` entry. At boot Docker can start containers before Tailscale assigns
+the address, so the bind fails. When that happened on 2026-10-13, `lite` came up
+with none of its ports published, loopback included: `ps` showed it Up with an
+empty `PORTS` column, and the tunnel stayed down until `lite` was recreated.
+
+## The compose.sh wrapper
 
 **Use `./compose.sh` rather than calling `docker compose` directly.** Passing
-`-f` disables Compose's automatic override discovery, so a command that omits
-the second file silently drops the tailnet bind on the next `up -d` -- the
-tunnel keeps working and direct access just stops, with no error. The wrapper
-applies the right files and env file every time:
+`-f` disables Compose's automatic override discovery, and leaving out
+`--env-file` fails on every required variable. The wrapper applies both every
+time:
 
 ```bash
 sudo ./compose.sh up -d
@@ -234,9 +237,8 @@ sudo ./compose.sh pull
 sudo ./compose.sh run --rm admin migrate
 ```
 
-It includes the tailnet overlay only when `LITE_TAILNET_BIND` is set, so the
-same script works unchanged on a host that only needs loopback. It echoes the
-command it runs, so what happened is always visible.
+It echoes the compose files it uses, but never the arguments, so a password
+passed to a command stays out of the terminal and the shell history.
 
 ## Step 6 — Redeploying
 
