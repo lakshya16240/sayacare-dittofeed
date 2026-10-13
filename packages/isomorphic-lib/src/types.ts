@@ -5549,6 +5549,54 @@ export type GetUserSubscriptionsResponse = Static<
   typeof GetUserSubscriptionsResponse
 >;
 
+export const GetUserJourneysRequest = Type.Object({
+  workspaceId: Type.String(),
+  userId: Type.String(),
+});
+
+export type GetUserJourneysRequest = Static<typeof GetUserJourneysRequest>;
+
+export const UserJourneyRun = Type.Object(
+  {
+    journeyId: Type.String(),
+    journeyName: Type.String(),
+    journeyStatus: JourneyResourceStatus,
+    startedAt: Type.Number({
+      description: "Unix timestamp in ms at which this run of the journey began.",
+    }),
+    eventKey: Type.Optional(Type.String()),
+    eventKeyName: Type.Optional(Type.String()),
+    exited: Type.Boolean({
+      description:
+        "Whether the user has reached the journey's exit node. A run that has not exited is still in progress.",
+    }),
+    lastNodeId: Type.Optional(
+      Type.String({
+        description:
+          "The last node the user completed. A user waiting on a delay or wait-for node is reported at the node before it.",
+      }),
+    ),
+    lastNodeType: Type.String(),
+    lastNodeProcessedAt: Type.Number({
+      description: "Unix timestamp in ms at which the last node completed.",
+    }),
+  },
+  {
+    description:
+      "A single pass of a user through a journey. A user can have several runs of one journey when it permits re-entry or is keyed by an event.",
+  },
+);
+
+export type UserJourneyRun = Static<typeof UserJourneyRun>;
+
+export const GetUserJourneysResponse = Type.Object({
+  workspaceId: Type.String(),
+  userId: Type.String(),
+  runs: Type.Array(UserJourneyRun),
+});
+
+export type GetUserJourneysResponse = Static<typeof GetUserJourneysResponse>;
+
 export enum CreateWorkspaceErrorType {
   WorkspaceAlreadyExists = "WorkspaceAlreadyExists",
   WorkspaceNameViolation = "WorkspaceNameViolation",

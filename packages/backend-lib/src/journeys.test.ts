@@ -5,10 +5,14 @@ import * as R from "remeda";
 
 import { submitTrack } from "./apps/track";
 import { db, insert } from "./db";
-import { journey as dbJourney } from "./db/schema";
+import {
+  journey as dbJourney,
+  userJourneyEvent as dbUserJourneyEvent,
+} from "./db/schema";
 import {
   getJourneyMessageStats,
   getJourneysStats,
+  getUserJourneys,
   upsertJourney,
 } from "./journeys";
 import { recordNodeProcessed } from "./journeys/recordNodeProcessed";
@@ -628,6 +632,219 @@ describe("journeys", () => {
         // assert that journey with conditions is triggered
         // asert journey status is updated
       });
+    });
+  });
+
+  describe("getUserJourneys", () => {
+    const userId = "user-1";
+    const t0 = new Date("2026-01-01T00:00:00.000Z").getTime();
+    const messageNodeId = "message-node";
+    const definition: JourneyDefinition = {
+      entryNode: {
+        type: JourneyNodeType.SegmentEntryNode,
+        segment: randomUUID(),
+        child: messageNodeId,
+      },
+      exitNode: {
+        type: JourneyNodeType.ExitNode,
+      },
+      nodes: [
+        {
+          id: messageNodeId,
+          type: JourneyNodeType.MessageNode,
+          variant: {
+            type: ChannelType.Email,
+            templateId: randomUUID(),
+          },
+          child: JourneyNodeType.ExitNode,
+        },
+      ],
+    };
+    let onboardingJourneyId: string;
+    let refillJourneyId: string;
+    let otherWorkspaceJourneyId: string;
+
+    beforeEach(async () => {
+      onboardingJourneyId = randomUUID();
+      refillJourneyId = randomUUID();
+      otherWorkspaceJourneyId = randomUUID();
+      const otherWorkspace = unwrap(
+        await createWorkspace({
+          id: randomUUID(),
+          name: randomUUID(),
+          updatedAt: new Date(),
+        }),
+      );
+      await db()
+        .insert(dbJourney)
+        .values([
+          {
+            workspaceId,
+            id: onboardingJourneyId,
+            definition,
+            name: "Onboarding",
+            status: JourneyResourceStatusEnum.Running,
+          },
+          {
+            workspaceId,
+            id: refillJourneyId,
+            definition,
+            name: "Refill reminder",
+            status: JourneyResourceStatusEnum.Paused,
+          },
+          {
+            workspaceId: otherWorkspace.id,
+            id: otherWorkspaceJourneyId,
+            definition,
+            name: "Other workspace",
+            status: JourneyResourceStatusEnum.Running,
+          },
+        ]);
+
+      const event = ({
+        journeyId,
+        startedAt,
+        type,
+        nodeId,
+        createdAt,
+        user = userId,
+        eventKey,
+        eventKeyName,
+      }: {
+        journeyId: string;
+        startedAt: number;
+        type: JourneyNodeType;
+        nodeId: string;
+        createdAt: number;
+        user?: string;
+        eventKey?: string;
+        eventKeyName?: string;
+      }) => ({
+        id: randomUUID(),
+        userId: user,
+        journeyId,
+        type,
+        nodeId,
+        journeyStartedAt: new Date(startedAt),
+        createdAt: new Date(createdAt),
+        eventKey,
+        eventKeyName,
+      });
+
+      await db()
+        .insert(dbUserJourneyEvent)
+        .values([
+          // A completed onboarding run.
+          event({
+            journeyId: onboardingJourneyId,
+            startedAt: t0,
+            type: JourneyNodeType.SegmentEntryNode,
+            nodeId: JourneyNodeType.SegmentEntryNode,
+            createdAt: t0,
+          }),
+          event({
+            journeyId: onboardingJourneyId,
+            startedAt: t0,
+            type: JourneyNodeType.MessageNode,
+            nodeId: messageNodeId,
+            createdAt: t0 + 1000,
+          }),
+          event({
+            journeyId: onboardingJourneyId,
+            startedAt: t0,
+            type: JourneyNodeType.ExitNode,
+            nodeId: JourneyNodeType.ExitNode,
+            createdAt: t0 + 2000,
+          }),
+          // A keyed refill run that has only entered.
+          event({
+            journeyId: refillJourneyId,
+            startedAt: t0 + 5000,
+            type: JourneyNodeType.EventEntryNode,
+            nodeId: JourneyNodeType.EventEntryNode,
+            createdAt: t0 + 5000,
+            eventKey: "order-1",
+            eventKeyName: "orderId",
+          }),
+          // A second onboarding run, still in progress.
+          event({
+            journeyId: onboardingJourneyId,
+            startedAt: t0 + 10000,
+            type: JourneyNodeType.SegmentEntryNode,
+            nodeId: JourneyNodeType.SegmentEntryNode,
+            createdAt: t0 + 10000,
+          }),
+          event({
+            journeyId: onboardingJourneyId,
+            startedAt: t0 + 10000,
+            type: JourneyNodeType.MessageNode,
+            nodeId: messageNodeId,
+            createdAt: t0 + 11000,
+          }),
+          // Neither of these belongs to the user in this workspace.
+          event({
+            journeyId: onboardingJourneyId,
+            startedAt: t0,
+            type: JourneyNodeType.SegmentEntryNode,
+            nodeId: JourneyNodeType.SegmentEntryNode,
+            createdAt: t0,
+            user: "user-2",
+          }),
+          event({
+            journeyId: otherWorkspaceJourneyId,
+            startedAt: t0,
+            type: JourneyNodeType.SegmentEntryNode,
+            nodeId: JourneyNodeType.SegmentEntryNode,
+            createdAt: t0,
+          }),
+        ]);
+    });
+
+    it("returns each of the user's runs in the workspace, most recent first", async () => {
+      const runs = await getUserJourneys({ workspaceId, userId });
+      expect(runs).toEqual([
+        {
+          journeyId: onboardingJourneyId,
+          journeyName: "Onboarding",
+          journeyStatus: JourneyResourceStatusEnum.Running,
+          startedAt: t0 + 10000,
+          eventKey: undefined,
+          eventKeyName: undefined,
+          exited: false,
+          lastNodeId: messageNodeId,
+          lastNodeType: JourneyNodeType.MessageNode,
+          lastNodeProcessedAt: t0 + 11000,
+        },
+        {
+          journeyId: refillJourneyId,
+          journeyName: "Refill reminder",
+          journeyStatus: JourneyResourceStatusEnum.Paused,
+          startedAt: t0 + 5000,
+          eventKey: "order-1",
+          eventKeyName: "orderId",
+          exited: false,
+          lastNodeId: JourneyNodeType.EventEntryNode,
+          lastNodeType: JourneyNodeType.EventEntryNode,
+          lastNodeProcessedAt: t0 + 5000,
+        },
+        {
+          journeyId: onboardingJourneyId,
+          journeyName: "Onboarding",
+          journeyStatus: JourneyResourceStatusEnum.Running,
+          startedAt: t0,
+          eventKey: undefined,
+          eventKeyName: undefined,
+          exited: true,
+          lastNodeId: JourneyNodeType.ExitNode,
+          lastNodeType: JourneyNodeType.ExitNode,
+          lastNodeProcessedAt: t0 + 2000,
+        },
+      ]);
+    });
+
+    it("returns no runs for a user who has not entered a journey", async () => {
+      const runs = await getUserJourneys({ workspaceId, userId: "user-3" });
+      expect(runs).toEqual([]);
     });
   });
 });

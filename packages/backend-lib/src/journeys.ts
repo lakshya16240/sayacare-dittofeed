@@ -1,7 +1,7 @@
 import { Row } from "@clickhouse/client";
 import { Counter } from "@opentelemetry/api";
 import { Type } from "@sinclair/typebox";
-import { and, eq, inArray, isNotNull, not, SQL } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, not, SQL } from "drizzle-orm";
 import { MESSAGE_EVENTS } from "isomorphic-lib/src/constants";
 import { doesEventNameMatch } from "isomorphic-lib/src/events";
 import {
@@ -53,6 +53,7 @@ import {
   DeleteMessageTemplateRequest,
   EmailStats,
   EnrichedJourney,
+  GetUserJourneysRequest,
   HasStartedJourneyResource,
   InternalEventType,
   Journey,
@@ -73,6 +74,7 @@ import {
   SegmentUpdate,
   SmsStats,
   UpsertJourneyResource,
+  UserJourneyRun,
   WhatsAppStats,
   WorkspaceQueueItemType,
 } from "./types";
@@ -1331,6 +1333,81 @@ export async function findSubscribedRunningJourneysForSegment({
     const subscribedSegments = getSubscribedSegments(definition);
     return subscribedSegments.has(segmentId);
   });
+}
+
+/**
+ * Returns every run of a journey that a user has entered, most recent first,
+ * with whether it has reached the exit node.
+ */
+export async function getUserJourneys({
+  workspaceId,
+  userId,
+}: GetUserJourneysRequest): Promise<UserJourneyRun[]> {
+  // UserJourneyEvent has no workspace id, so it is scoped through the
+  // workspace's journeys. Filtering on journey id also lets the query use the
+  // table's (journeyId, userId, ...) index.
+  const journeys = await db()
+    .select({
+      id: dbJourney.id,
+      name: dbJourney.name,
+      status: dbJourney.status,
+    })
+    .from(dbJourney)
+    .where(eq(dbJourney.workspaceId, workspaceId));
+  if (journeys.length === 0) {
+    return [];
+  }
+  const journeysById = new Map(journeys.map((j) => [j.id, j]));
+
+  const events = await db()
+    .select()
+    .from(schema.userJourneyEvent)
+    .where(
+      and(
+        inArray(
+          schema.userJourneyEvent.journeyId,
+          Array.from(journeysById.keys()),
+        ),
+        eq(schema.userJourneyEvent.userId, userId),
+      ),
+    )
+    .orderBy(asc(schema.userJourneyEvent.createdAt));
+
+  const runs = new Map<string, UserJourneyRun>();
+  for (const event of events) {
+    const journey = event.journeyId
+      ? journeysById.get(event.journeyId)
+      : undefined;
+    if (!journey) {
+      continue;
+    }
+    const startedAt = event.journeyStartedAt.getTime();
+    const runKey = JSON.stringify([
+      journey.id,
+      startedAt,
+      event.eventKey,
+      event.eventKeyName,
+    ]);
+    // Exiting is final, so a node recorded in the same millisecond cannot
+    // reopen the run.
+    if (runs.get(runKey)?.exited) {
+      continue;
+    }
+    runs.set(runKey, {
+      journeyId: journey.id,
+      journeyName: journey.name,
+      journeyStatus: journey.status,
+      startedAt,
+      eventKey: event.eventKey ?? undefined,
+      eventKeyName: event.eventKeyName ?? undefined,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
+      exited: event.type === JourneyNodeType.ExitNode,
+      lastNodeId: event.nodeId ?? undefined,
+      lastNodeType: event.type,
+      lastNodeProcessedAt: event.createdAt.getTime(),
+    });
+  }
+  return Array.from(runs.values()).sort((a, b) => b.startedAt - a.startedAt);
 }
 
 export async function deleteMessageTemplate(

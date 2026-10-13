@@ -1,9 +1,12 @@
 import { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
+import { getUserJourneys } from "backend-lib/src/journeys";
 import { getUserSubscriptions } from "backend-lib/src/subscriptionGroups";
 import {
   BadRequestResponse,
   DeleteUsersRequest,
   EmptyResponse,
+  GetUserJourneysRequest,
+  GetUserJourneysResponse,
   GetUsersCountResponse,
   GetUsersRequest,
   GetUsersResponse,
@@ -91,6 +94,29 @@ export default async function usersController(fastify: FastifyInstance) {
         workspaceId: request.query.workspaceId,
         userId: request.query.userId,
         subscriptionGroups: result,
+      });
+    },
+  );
+
+  fastify.withTypeProvider<TypeBoxTypeProvider>().get(
+    "/journeys",
+    {
+      schema: {
+        description:
+          "Get the journeys a user has entered, one entry per run, most recent first. A run with exited set to false is still in progress.",
+        tags: ["Users"],
+        querystring: GetUserJourneysRequest,
+        response: {
+          200: GetUserJourneysResponse,
+        },
+      },
+    },
+    async (request, reply) => {
+      const runs = await getUserJourneys(request.query);
+      return reply.status(200).send({
+        workspaceId: request.query.workspaceId,
+        userId: request.query.userId,
+        runs,
       });
     },
   );
