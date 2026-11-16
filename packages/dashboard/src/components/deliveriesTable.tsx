@@ -621,7 +621,7 @@ export function DeliveriesTable({
                     field: "userId",
                     headerName: "User ID",
                     renderCell: ({ row }: GridRenderCellParams<TableItem>) => {
-                      const href = `/users/${row.userId}`;
+                      const href = `/users/${encodeURIComponent(row.userId)}`;
                       return <LinkCell href={href} title={row.userId} />;
                     },
                   },
@@ -630,7 +630,7 @@ export function DeliveriesTable({
               field: "to",
               headerName: "To",
               renderCell: ({ row }: GridRenderCellParams<TableItem>) => {
-                const href = `/users/${row.userId}`;
+                const href = `/users/${encodeURIComponent(row.userId)}`;
                 if (disableToLinks) {
                   return <span>{row.to}</span>;
                 }

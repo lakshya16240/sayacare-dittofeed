@@ -286,7 +286,7 @@ export default function UsersTable({
       getRowId={(row) => row.id}
       onRowClick={(params) => {
         router.push({
-          pathname: `/users/${params.id}`,
+          pathname: `/users/${encodeURIComponent(params.id)}`,
         });
       }}
       autoHeight

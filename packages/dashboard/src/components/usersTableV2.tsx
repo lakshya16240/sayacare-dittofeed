@@ -115,7 +115,7 @@ function UserIdCell({
   userUriTemplate: string;
 }) {
   const [showCopied, setShowCopied] = React.useState(false);
-  const uri = userUriTemplate.replace("{userId}", value);
+  const uri = userUriTemplate.replace("{userId}", encodeURIComponent(value));
 
   const handleCopy = () => {
     navigator.clipboard.writeText(value);
