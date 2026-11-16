@@ -254,7 +254,7 @@ function UserIdCell({ value }: { value: string | null }) {
     return <Typography color="text.secondary">—</Typography>;
   }
 
-  const uri = `/users/${value}`;
+  const uri = `/users/${encodeURIComponent(value)}`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(value);

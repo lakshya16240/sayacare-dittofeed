@@ -70,25 +70,25 @@ export function UserTabs({ userId }: UserTabsProps) {
           label="Properties"
           value="users"
           component={Link}
-          href={`/users/${userId}`}
+          href={`/users/${encodeURIComponent(userId)}`}
         />
         <Tab
           label="Segments"
           value="segments"
           component={Link}
-          href={`/users/segments/${userId}`}
+          href={`/users/segments/${encodeURIComponent(userId)}`}
         />
         <Tab
           label="Events"
           value="events"
           component={Link}
-          href={`/users/events/${userId}`}
+          href={`/users/events/${encodeURIComponent(userId)}`}
         />
         <Tab
           label="Deliveries"
           value="deliveries"
           component={Link}
-          href={`/users/deliveries/${userId}`}
+          href={`/users/deliveries/${encodeURIComponent(userId)}`}
         />
       </Tabs>
       <Box sx={{ p: 2 }}>

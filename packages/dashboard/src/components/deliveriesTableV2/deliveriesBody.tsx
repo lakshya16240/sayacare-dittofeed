@@ -497,7 +497,7 @@ function renderPreviewCellFactory(setState: SetDeliveriesBodyState) {
 
 function UserIdCell({ value }: { value: string }) {
   const [showCopied, setShowCopied] = useState(false);
-  const uri = `/users/${value}`;
+  const uri = `/users/${encodeURIComponent(value)}`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(value);

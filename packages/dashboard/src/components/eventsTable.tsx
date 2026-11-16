@@ -268,7 +268,7 @@ export function EventsTable({
       field: "userId",
       headerName: "User Id",
       renderCell: ({ value }: GridRenderCellParams) => (
-        <LinkCell href={`/users/${value}`} title={value}>
+        <LinkCell href={`/users/${encodeURIComponent(value)}`} title={value}>
           <Box
             sx={{
               fontFamily: "monospace",
